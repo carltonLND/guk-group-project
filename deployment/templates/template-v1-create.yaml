@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Template for group3 ETL pipeline.
+
+# Manually adding trigger to lambda / event to
+# delon8-group3 bucket through the console.
+
+Parameters:
+  DeploymentBucket:
+    Type: String
+    Default: group3-stack-deployment-needed
+  DeploymentRequirements:
+    Type: String
+    Default: code/requirements.zip
+  DeploymentCode:
+    Type: String
+    Default: code/deploy_code_v1.zip
+
+Resources:
+  NormaliseSQS:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: group3-normalise-sqs-needed.fifo
+      FifoQueue: True
+
+  LambdaRequirementsLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: group3-requirements-needed
+      CompatibleArchitectures:
+        - x86_64
+      CompatibleRuntimes:
+        - python3.9
+        - python3.8
+      Content:
+        S3Bucket: !Ref DeploymentBucket
+        S3Key: !Ref DeploymentRequirements
+
+  LambdaFunctionNormalise:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: group3-normalise-lambda-needed
+      Runtime: python3.9
+      Handler: src/lambdas/normalise_handler.handler
+      Timeout: 5
+      Role: arn:aws:iam::948243690849:role/lambda-execution-role
+      Layers:
+        - arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python39:2
+      Code:
+        S3Bucket: !Ref DeploymentBucket
+        S3Key: !Ref DeploymentCode
+      VpcConfig:
+        SecurityGroupIds:
+          - sg-09ddd305daee3cb89
+        SubnetIds:
+          - subnet-0ec1bb10a4f1c8bc2
+
+  LambdaFunctionLoad:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: group3-load-lambda-needed
+      Runtime: python3.9
+      Handler: src/lambdas/load_handler.handler
+      ReservedConcurrentExecutions: 1
+      Timeout: 10
+      Role: arn:aws:iam::948243690849:role/lambda-execution-role
+      Layers:
+        - arn:aws:lambda:eu-west-1:336392948345:layer:AWSSDKPandas-Python39:2
+        - !Ref LambdaRequirementsLayer
+      Code:
+        S3Bucket: !Ref DeploymentBucket
+        S3Key: !Ref DeploymentCode
+      VpcConfig:
+        SecurityGroupIds:
+          - sg-09ddd305daee3cb89
+        SubnetIds:
+          - subnet-0ec1bb10a4f1c8bc2
+    DependsOn:
+      - LambdaRequirementsLayer
+
+  LoadEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      Enabled: True
+      EventSourceArn: !GetAtt NormaliseSQS.Arn
+      FunctionName: !Ref LambdaFunctionLoad
+    DependsOn:
+      - LambdaFunctionLoad
+      - NormaliseSQS
+
+  S3BucketTarget:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: group3-stack-target-needed
+      LifecycleConfiguration:
+        Rules:
+          - Id: TimedObjectRule
+            Status: Enabled
+            ExpirationInDays: 3
+
+  S3BucketStaging:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: group3-stack-staging-needed
+      LifecycleConfiguration:
+        Rules:
+          - Id: TimedObjectRule
+            Status: Enabled
+            ExpirationInDays: 1
+
+  S3BucketPermissionSource:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionNormalise
+      Principal: s3.amazonaws.com
+      SourceArn: arn:aws:s3:::delon8-group3

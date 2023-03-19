@@ -1,0 +1,39 @@
+name: Python Code Quality Testing
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+  workflow_dispatch:
+
+jobs:
+  linting:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project source code
+        uses: actions/checkout@v3
+      - name: Lint with black
+        uses: psf/black@main
+        with:
+          src: "src"
+      - name: Lint with isort
+        uses: isort/isort-action@master
+        with:
+          configuration: "--check-only --profile black"
+      - name: Lint with flake8
+        uses: py-actions/flake8@v2
+
+  testing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setting up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: install all the dependencies
+        run: make dev
+      - name: Test with pytest
+        run: pytest

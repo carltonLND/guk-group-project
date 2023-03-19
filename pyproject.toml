@@ -1,0 +1,10 @@
+[project]
+name = "guk-cafe-pipeline"
+version = "0.1.0"
+dependencies = ["aws-psycopg2"]
+
+[project.optional-dependencies]
+dev = ["black", "isort", "flake8", "pytest", "boto3", "pandas"]
+
+[tool.isort]
+profile = "black"
